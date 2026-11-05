@@ -2,11 +2,15 @@ import com.codeborne.selenide.Configuration;
 import com.codeborne.selenide.ElementsCollection;
 import com.codeborne.selenide.Selenide;
 import com.codeborne.selenide.SelenideElement;
+import com.codeborne.selenide.ex.FileNotDownloadedError;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Properties;
 
 import static com.codeborne.selenide.Condition.checked;
@@ -18,8 +22,10 @@ import static com.codeborne.selenide.Selectors.byText;
 import static com.codeborne.selenide.Selenide.$;
 import static com.codeborne.selenide.Selenide.$$;
 import static com.codeborne.selenide.Selenide.open;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class InzhenerkaLoginTest {
+public class StepikTest {
     @BeforeAll
     public static void setUp() {
         Properties properties = new Properties();
@@ -97,17 +103,17 @@ public class InzhenerkaLoginTest {
         $(byText("File Upload")).click();
         $("body").shouldHave(text("File Uploader"));
         $("p").shouldHave(text("Choose a file on your system and then click upload. Or, drag and drop a file into the area below."));
-       SelenideElement fileUpload = $("#file-upload");
-       SelenideElement submit2 = $("button[type='submit']");
+        SelenideElement fileUpload = $("#file-upload");
+        SelenideElement submit2 = $("button[type='submit']");
         SelenideElement submit = $("#file-submit");
-       fileUpload.shouldBe(visible);
-       fileUpload.shouldBe(enabled);
-       submit.shouldBe(visible);
-       fileUpload.uploadFromClasspath("test.txt");
-       submit.click();
+        fileUpload.shouldBe(visible);
+        fileUpload.shouldBe(enabled);
+        submit.shouldBe(visible);
+        fileUpload.uploadFromClasspath("test.txt");
+        submit.click();
         $("#uploaded-files").shouldHave(text("test.txt"));
         Selenide.back();
-         //---
+        //---
         fileUpload.uploadFromClasspath("wrongType.bat");
         submit.click();
         $("h3").shouldHave(text("File type not allowed"));
@@ -116,9 +122,14 @@ public class InzhenerkaLoginTest {
         $(byText("Back to the File Uploader")).click();
         $("#file-upload").shouldBe(visible);
 
+        // ---- FILE DWONLOAD ---------
 
+        open("https://the-internet.herokuapp.com/");
+        $(byText("File Download")).click();
+        $("body").shouldHave(text("File Downloader"));
+        checkDownloads();
 
-
+        Selenide.back();
 
 
 
@@ -140,6 +151,31 @@ public class InzhenerkaLoginTest {
         // 6. Проверка выхода (снова видна кнопка "Вход")
         $("button[type='submit']").shouldBe(visible);
 */
+
+    }
+
+    private void checkDownloads() {
+        List<String> filezz = Arrays.asList(
+                "Assert.jpg",
+                "arrastrado.txt",
+                "carrossel_vhs_01.png",
+                //"wrongFileName.abc.png",
+                "Pigeon.png"
+        );
+
+
+        for (String file : filezz) {
+            try {
+                File downloadedFile = $(byText(file)).download();
+                assertTrue(downloadedFile.exists(), "Файл не был найден на диске!");
+                // 4. Проверяем, что имя скачанного файла верное
+                assertEquals(file, downloadedFile.getName());
+                // Опционально: можно вывести в консоль абсолютный путь, куда Selenide его сохранил
+                System.out.println("Файл успешно скачан в: " + downloadedFile.getAbsolutePath());
+            } catch (FileNotDownloadedError ex) {
+                ex.printStackTrace();
+            }
+        }
 
     }
 
