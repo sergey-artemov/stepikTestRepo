@@ -9,18 +9,27 @@ import org.junit.jupiter.api.Test;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Properties;
 
 import static com.codeborne.selenide.Condition.checked;
 import static com.codeborne.selenide.Condition.disabled;
+import static com.codeborne.selenide.Condition.editable;
 import static com.codeborne.selenide.Condition.enabled;
+import static com.codeborne.selenide.Condition.exactValue;
 import static com.codeborne.selenide.Condition.text;
+import static com.codeborne.selenide.Condition.value;
 import static com.codeborne.selenide.Condition.visible;
 import static com.codeborne.selenide.Selectors.byText;
 import static com.codeborne.selenide.Selenide.$;
 import static com.codeborne.selenide.Selenide.$$;
+import static com.codeborne.selenide.Selenide.$x;
 import static com.codeborne.selenide.Selenide.open;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -41,7 +50,7 @@ public class StepikTest {
     }
 
     @Test
-    void herokuTest() {
+    void herokuTest() throws InterruptedException {
         // 1. Открыть страницу
         open("https://the-internet.herokuapp.com/");
 
@@ -99,19 +108,33 @@ public class StepikTest {
         $("#result").shouldHave(text("Color: blue, Sport: football"));
         Selenide.back();
 
+        String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmm"));
+        String uniqueFileName = "test_" + timestamp + ".txt";
+        File tempDir = new File(System.getProperty("java.io.tmpdir"));
+        File temporaryFile = new File(tempDir, uniqueFileName);
+        try (InputStream is = getClass().getClassLoader().getResourceAsStream("test.txt")) {
+            if (is == null) {
+                throw new IllegalArgumentException("Файл test.txt не найден в src/test/resources!");
+            }
+            // Копируем поток данных в новый файл на диске
+            Files.copy(is, temporaryFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
+        } catch( Exception ex) {
+            System.out.println("Что-то пошло не так");
+        }
+
         // ---- FILE UPLOAD ---------
         $(byText("File Upload")).click();
         $("body").shouldHave(text("File Uploader"));
         $("p").shouldHave(text("Choose a file on your system and then click upload. Or, drag and drop a file into the area below."));
         SelenideElement fileUpload = $("#file-upload");
-        SelenideElement submit2 = $("button[type='submit']");
         SelenideElement submit = $("#file-submit");
         fileUpload.shouldBe(visible);
         fileUpload.shouldBe(enabled);
         submit.shouldBe(visible);
-        fileUpload.uploadFromClasspath("test.txt");
+        // fileUpload.uploadFromClasspath("test.txt");
+        fileUpload.uploadFile(temporaryFile);
         submit.click();
-        $("#uploaded-files").shouldHave(text("test.txt"));
+        $("#uploaded-files").shouldHave(text(uniqueFileName));
         Selenide.back();
         //---
         fileUpload.uploadFromClasspath("wrongType.bat");
@@ -122,18 +145,67 @@ public class StepikTest {
         $(byText("Back to the File Uploader")).click();
         $("#file-upload").shouldBe(visible);
 
-        // ---- FILE DWONLOAD ---------
 
+        // ---- FILE DWONLOAD ---------
+        Thread.sleep(3000);
         open("https://the-internet.herokuapp.com/");
         $(byText("File Download")).click();
         $("body").shouldHave(text("File Downloader"));
-        checkDownloads();
+
+
+        try {
+            File downloadedFile = $(byText(uniqueFileName)).download();
+            assertTrue(downloadedFile.exists(), "Файл не был найден на диске!");
+            // 4. Проверяем, что имя скачанного файла верное
+            assertEquals(uniqueFileName, downloadedFile.getName());
+            // Опционально: можно вывести в консоль абсолютный путь, куда Selenide его сохранил
+            System.out.println("Файл успешно скачан в: " + downloadedFile.getAbsolutePath());
+        } catch (FileNotDownloadedError ex) {
+            ex.printStackTrace();
+        }
 
         Selenide.back();
 
+        // readonly text
+        $(byText("Read-only Inputs")).click();
+        $("body").shouldHave(text("Read-only Inputs"));
 
+        SelenideElement check = $("#checkbox");
+        SelenideElement text1 = $("#textfield");
+        SelenideElement text2 = $("#always-readonly");
+        SelenideElement text3 = $("#disabled");
 
+        check.shouldBe(enabled);
+        text1.shouldBe(editable);
+        text2.shouldNotBe(editable);
+        text3.shouldNotBe(editable);
+        text3.shouldBe(disabled);
 
+        check.click();
+
+        text1.shouldNotBe(editable);
+        text2.shouldNotBe(editable);
+        text3.shouldNotBe(editable);
+        text3.shouldBe(disabled);
+        text1.shouldNotBe(disabled);
+        text2.shouldNotBe(disabled);
+        Selenide.back();
+
+   //  INPUTS
+        $(byText("Inputs")).click();
+        $("body").shouldHave(text("Inputs"));
+
+        SelenideElement inp = $x("//p[text()='Number']/following-sibling::input") ;
+        inp.shouldBe(visible);
+
+        inp.setValue("55");
+        inp.shouldHave(value("55"));
+        inp.clear();
+
+        inp.setValue("abc");
+        inp.shouldHave(exactValue(""));
+        inp.clear();
+        Selenide.back();
 
 /*
 
@@ -153,30 +225,4 @@ public class StepikTest {
 */
 
     }
-
-    private void checkDownloads() {
-        List<String> filezz = Arrays.asList(
-                "Assert.jpg",
-                "arrastrado.txt",
-                "carrossel_vhs_01.png",
-                //"wrongFileName.abc.png",
-                "Pigeon.png"
-        );
-
-
-        for (String file : filezz) {
-            try {
-                File downloadedFile = $(byText(file)).download();
-                assertTrue(downloadedFile.exists(), "Файл не был найден на диске!");
-                // 4. Проверяем, что имя скачанного файла верное
-                assertEquals(file, downloadedFile.getName());
-                // Опционально: можно вывести в консоль абсолютный путь, куда Selenide его сохранил
-                System.out.println("Файл успешно скачан в: " + downloadedFile.getAbsolutePath());
-            } catch (FileNotDownloadedError ex) {
-                ex.printStackTrace();
-            }
-        }
-
-    }
-
 }
